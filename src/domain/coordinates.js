@@ -1,7 +1,4 @@
-import * as mgrsModule from 'mgrs';
-
-// Handle CommonJS / ESM default export variation
-const mgrs = mgrsModule.default || mgrsModule;
+import { forward, toPoint } from 'mgrs';
 
 /**
  * Parses user input into WGS 84 latitude and longitude.
@@ -66,7 +63,7 @@ export function wgs84ToMgrs(lat, lon, accuracy = 5) {
   }
 
   try {
-    const raw = mgrs.forward([lon, lat], accuracy);
+    const raw = forward([lon, lat], accuracy);
     // Format into standard readable MGRS spacing: e.g. "36U UA 24193 90589"
     // raw is typically like "36UUA2419390589" (gridZone: 3 chars, 100km id: 2 chars, easting: 5 chars, northing: 5 chars)
     const match = raw.match(/^(\d{1,2}[C-X])([A-Z]{2})(\d+)$/);
@@ -104,7 +101,7 @@ export function parseMgrs(input) {
   }
 
   try {
-    const point = mgrs.toPoint(cleaned);
+    const point = toPoint(cleaned);
     const lon = point[0];
     const lat = point[1];
     if (Number.isNaN(lat) || Number.isNaN(lon)) {
