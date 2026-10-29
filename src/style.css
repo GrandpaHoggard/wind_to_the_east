@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #0b0f17;
+    color: #f1f5f9;
+  }
+}
+
+/* Tabular numerals for alignment in weather and flight tables */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom dark tactical scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Leaflet dark theme tweaks */
+.leaflet-container {
+  background: #0f172a !important;
+  font-family: inherit;
+}
+.leaflet-tile {
+  filter: brightness(0.65) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.75);
+}
+.leaflet-bar a {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+  border-bottom: 1px solid #334155 !important;
+}
+.leaflet-bar a:hover {
+  background-color: #334155 !important;
+}
