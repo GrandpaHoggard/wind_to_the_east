@@ -97,14 +97,15 @@ export function computeAltitudeProfile(rawHour) {
   }
 
   const maxNearSurfaceAgl = knots[knots.length - 1].agl;
+  const minIsobaricAgl = Math.max(180, maxNearSurfaceAgl);
 
   // Isobaric level knots (filtered to exclude subterranean or near-ground redundant levels)
   if (Array.isArray(rawHour?.pressureLevels)) {
     for (const pl of rawHour.pressureLevels) {
       if (pl.geopotentialHeightMsl == null) continue;
       const agl = pl.geopotentialHeightMsl - elevation;
-      // Discard subterranean levels and levels below near-surface knots
-      if (agl <= maxNearSurfaceAgl) continue;
+      // Discard subterranean levels and levels below 180m / near-surface knots
+      if (agl <= minIsobaricAgl) continue;
 
       knots.push({
         agl,

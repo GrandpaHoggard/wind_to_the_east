@@ -82,4 +82,30 @@ describe('AGL vertical interpolation and Wind Shear gust model', () => {
     expect(sheared[0].windGustMs).toBe(7);
     expect(sheared[1500].windGustMs).toBeGreaterThan(sheared[1500].windSpeedMs);
   });
+
+  it('enforces 180m AGL minimum cutoff for isobaric pressure levels even when near-surface knots are absent', () => {
+    const profile = computeAltitudeProfile({
+      elevationMeters: 500,
+      surface: {
+        tempC: 15,
+        humidityPct: 60,
+        cloudCoverPct: 10,
+        cloudLowPct: 10,
+        cloudMidPct: 10,
+        windSpeed10m: 3,
+        windDir10m: 180,
+        windGusts10m: 5,
+        // No 80m, 120m, 180m near-surface knots provided
+      },
+      pressureLevels: [
+        // AGL = 600 - 500 = 100m, which is <= 180m minimum isobaric cutoff. Must be ignored!
+        { hPa: 950, geopotentialHeightMsl: 600, windSpeedMs: 99, windDirDeg: 0, tempC: 30, humidityPct: 10, cloudCoverPct: 0 },
+        // AGL = 800 - 500 = 300m, valid isobaric knot
+        { hPa: 925, geopotentialHeightMsl: 800, windSpeedMs: 7, windDirDeg: 190, tempC: 12, humidityPct: 65, cloudCoverPct: 20 },
+      ],
+    });
+
+    // 100m AGL tier must NOT be 99 m/s from subterranean/near-ground isobaric level
+    expect(profile[100].windSpeedMs).toBeLessThan(10);
+  });
 });

@@ -78,4 +78,50 @@ describe('Wind to the East full dashboard', () => {
     expect(wrapper.find('[data-testid="error-banner"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('4.2 м/с'); // Previous forecast preserved
   });
+
+  it('synchronizes activeHourIso to current wall-clock hour and decouples CurrentConditionsCard from row selection', async () => {
+    const now = new Date();
+    const currentIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:00`;
+    const pastIso = '2020-01-01T00:00';
+
+    const multiHourPayload = {
+      elevation: 100,
+      timezone: 'Europe/Kyiv',
+      hourly: {
+        time: [pastIso, currentIso],
+        temperature_2m: [-15.0, 18.5],
+        relative_humidity_2m: [90, 45],
+        precipitation_probability: [0, 0],
+        precipitation: [0, 0],
+        cloud_cover: [100, 15],
+        cloud_cover_low: [100, 10],
+        cloud_cover_mid: [80, 5],
+        wind_speed_10m: [12.0, 3.5],
+        wind_direction_10m: [0, 180],
+        wind_gusts_10m: [15.0, 5.0],
+      },
+    };
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => multiHourPayload,
+    });
+
+    const wrapper = mount(App, { props: { fetchImpl: mockFetch } });
+    await flushPromises();
+
+    const currentCard = wrapper.findComponent({ name: 'CurrentConditionsCard' });
+    expect(currentCard.exists()).toBe(true);
+    // Current card should show current hour temperature (18.5°C), NOT past hour (-15°C)
+    expect(currentCard.text()).toContain('18.5°C');
+
+    // Clicking the past row (first row in table) must NOT hijack CurrentConditionsCard
+    const rows = wrapper.findAll('[data-testid="forecast-row"]');
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    await rows[0].trigger('click');
+    await flushPromises();
+
+    // Current conditions card must still retain current conditions (18.5°C)
+    expect(currentCard.text()).toContain('18.5°C');
+  });
 });

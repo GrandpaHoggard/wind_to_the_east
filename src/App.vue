@@ -195,7 +195,7 @@ const mgrsFormatted = computed(() => {
   return res.ok ? res.mgrs : '—';
 });
 
-const currentHourRecord = computed(() => findCurrentHourRecord(allHours.value, activeHourIso.value));
+const currentHourRecord = computed(() => findCurrentHourRecord(allHours.value));
 
 const displayedHours = computed(() => {
   if (filterMode.value === 'current') {
@@ -223,7 +223,8 @@ async function loadForecast() {
     forecastElevation.value = res.elevationMeters;
     forecastTimezone.value = res.timezone;
     if (res.hours.length > 0 && !activeHourIso.value) {
-      activeHourIso.value = res.hours[0].timeIso;
+      const nowRecord = findCurrentHourRecord(res.hours);
+      activeHourIso.value = nowRecord ? nowRecord.timeIso : res.hours[0].timeIso;
     }
   } catch (err) {
     errorMessage.value = err.message || 'Не вдалося завантажити погодні дані';

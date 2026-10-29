@@ -32,6 +32,7 @@
           <tr
             v-for="h in hours"
             :key="h.timeIso"
+            data-testid="forecast-row"
             class="hover:bg-slate-800/60 transition cursor-pointer"
             :class="h.timeIso === activeHourIso ? 'bg-emerald-950/30 border-l-2 border-emerald-500' : ''"
             @click="$emit('select-hour', h.timeIso)"
