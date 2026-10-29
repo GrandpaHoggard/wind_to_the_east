@@ -1,0 +1,26 @@
+{
+  "name": "wind-to-the-east",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4",
+    "mgrs": "^2.0.0",
+    "vue": "^3.5.13",
+    "wind-to-the-east": "file:"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/test-utils": "^2.4.6",
+    "jsdom": "^26.0.0",
+    "tailwindcss": "^4.0.0",
+    "vite": "^6.1.0",
+    "vitest": "^3.0.5"
+  }
+}
