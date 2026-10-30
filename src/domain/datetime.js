@@ -115,17 +115,46 @@ export function isoHourToDisplay(timeIso) {
   };
 }
 
+function formatIsoHourInTimeZone(date, timeZone) {
+  try {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+    });
+    const parts = Object.fromEntries(fmt.formatToParts(date).map((p) => [p.type, p.value]));
+    const hh = parts.hour === '24' ? '00' : parts.hour;
+    if (parts.year && parts.month && parts.day && hh) {
+      return `${parts.year}-${parts.month}-${parts.day}T${hh}:00`;
+    }
+  } catch {
+    // Ignore invalid IANA timezone and fall back to browser clock
+  }
+  return null;
+}
+
 /**
  * Finds current hour record in an array of hourly records.
+ * Prioritizes explicit nowIsoHour, then target location IANA timezone, then browser local clock.
  */
-export function findCurrentHourRecord(records, nowIsoHour) {
+export function findCurrentHourRecord(records, nowIsoHour, timezone) {
   if (!Array.isArray(records) || records.length === 0) return null;
   if (nowIsoHour) {
     const found = records.find((r) => r.timeIso === nowIsoHour);
     if (found) return found;
   }
-  // Fallback to record closest to current wall clock time in local timezone
   const now = new Date();
+  if (timezone) {
+    const tzIso = formatIsoHourInTimeZone(now, timezone);
+    if (tzIso) {
+      const tzMatch = records.find((r) => r.timeIso === tzIso);
+      if (tzMatch) return tzMatch;
+    }
+  }
+  // Fallback to record matching current wall clock time in browser timezone
   const currentIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:00`;
   const match = records.find((r) => r.timeIso === currentIso);
   return match || records[0];

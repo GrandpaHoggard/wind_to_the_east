@@ -13,9 +13,11 @@
         <label class="text-xs text-slate-400">Година зрізу:</label>
         <select
           :value="activeHourIso"
-          class="bg-slate-900 border border-slate-700 text-slate-100 rounded-lg px-2.5 py-1 text-xs font-mono focus:outline-none focus:border-emerald-500 cursor-pointer"
+          :disabled="hours.length === 0"
+          class="bg-slate-900 border border-slate-700 text-slate-100 rounded-lg px-2.5 py-1 text-xs font-mono focus:outline-none focus:border-emerald-500 cursor-pointer disabled:opacity-50"
           @change="$emit('update:activeHourIso', $event.target.value)"
         >
+          <option v-if="hours.length === 0" value="">Немає даних</option>
           <option v-for="h in hours" :key="h.timeIso" :value="h.timeIso">
             {{ h.dateStr }} {{ h.hourStr }}
           </option>
@@ -37,6 +39,14 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-800/60 font-mono text-slate-200">
+          <tr
+            v-if="tiersReversed.length === 0"
+            data-testid="profile-empty-row"
+          >
+            <td colspan="6" class="py-6 px-4 text-center font-sans text-xs text-slate-400">
+              Немає завантажених метеоданих для побудови висотного профілю. Перевірте підключення та натисніть «Повторити».
+            </td>
+          </tr>
           <tr
             v-for="tier in tiersReversed"
             :key="tier.aglMeters"

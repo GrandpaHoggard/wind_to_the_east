@@ -1,7 +1,7 @@
 import { normalizeDegrees, formatWindDirection } from './windVane.js';
 
 export const AGL_TIERS_METERS = [
-  0, 25, 50, 75, 100, 120, 150, 200, 300, 500, 1000, 1500, 2000, 3000, 5000,
+  0, 50, 75, 100, 120, 150, 200, 300, 500, 1000, 1500, 2000, 3000, 4000, 5000,
 ];
 
 /**
@@ -40,6 +40,14 @@ function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
+function round1OrNull(val) {
+  return val == null ? null : Math.round(val * 10) / 10;
+}
+
+function roundIntOrNull(val) {
+  return val == null ? null : Math.round(val);
+}
+
 /**
  * Computes the 15-tier vertical atmospheric profile from raw surface + isobaric inputs.
  * Enforces:
@@ -61,7 +69,7 @@ export function computeAltitudeProfile(rawHour) {
     windDirDeg: s.windDir10m ?? 0,
     tempC: s.tempC ?? null,
     humidityPct: s.humidityPct ?? null,
-    cloudCoverPct: s.cloudLowPct ?? s.cloudCoverPct ?? 0,
+    cloudCoverPct: s.cloudCoverPct ?? s.cloudLowPct ?? 0,
   });
 
   // Fixed near-surface model levels if provided
@@ -99,21 +107,30 @@ export function computeAltitudeProfile(rawHour) {
   const maxNearSurfaceAgl = knots[knots.length - 1].agl;
   const minIsobaricAgl = Math.max(180, maxNearSurfaceAgl);
 
-  // Isobaric level knots (filtered to exclude subterranean or near-ground redundant levels)
+  // Isobaric level knots (filtered to exclude subterranean, near-ground, or windless incomplete levels)
   if (Array.isArray(rawHour?.pressureLevels)) {
     for (const pl of rawHour.pressureLevels) {
-      if (pl.geopotentialHeightMsl == null) continue;
+      if (pl.geopotentialHeightMsl == null || pl.windSpeedMs == null) continue;
       const agl = pl.geopotentialHeightMsl - elevation;
       // Discard subterranean levels and levels below 180m / near-surface knots
       if (agl <= minIsobaricAgl) continue;
 
+      let fallbackCloud = s.cloudCoverPct ?? 0;
+      if (agl >= 4000 && s.cloudHighPct != null) {
+        fallbackCloud = s.cloudHighPct;
+      } else if (agl >= 2000 && s.cloudMidPct != null) {
+        fallbackCloud = s.cloudMidPct;
+      } else if (agl < 2000 && s.cloudLowPct != null) {
+        fallbackCloud = s.cloudLowPct;
+      }
+
       knots.push({
         agl,
-        windSpeedMs: pl.windSpeedMs ?? 0,
+        windSpeedMs: pl.windSpeedMs,
         windDirDeg: pl.windDirDeg ?? 0,
         tempC: pl.tempC ?? null,
         humidityPct: pl.humidityPct ?? null,
-        cloudCoverPct: pl.cloudCoverPct ?? (agl >= 2000 ? s.cloudMidPct : s.cloudLowPct) ?? s.cloudCoverPct ?? 0,
+        cloudCoverPct: pl.cloudCoverPct ?? fallbackCloud,
       });
     }
   }
@@ -167,11 +184,11 @@ export function computeAltitudeProfile(rawHour) {
 
     interpolated.push({
       aglMeters: z,
-      windSpeedMs: Math.round(lerp(lower.windSpeedMs, upper.windSpeedMs, t) * 10) / 10,
+      windSpeedMs: round1OrNull(lerp(lower.windSpeedMs, upper.windSpeedMs, t)),
       windDirDeg: interpolateCircularDegrees(lower.windDirDeg, upper.windDirDeg, t),
-      tempC: Math.round(lerp(lower.tempC, upper.tempC, t) * 10) / 10,
-      humidityPct: Math.round(lerp(lower.humidityPct, upper.humidityPct, t)),
-      cloudCoverPct: Math.round(lerp(lower.cloudCoverPct, upper.cloudCoverPct, t)),
+      tempC: round1OrNull(lerp(lower.tempC, upper.tempC, t)),
+      humidityPct: roundIntOrNull(lerp(lower.humidityPct, upper.humidityPct, t)),
+      cloudCoverPct: roundIntOrNull(lerp(lower.cloudCoverPct, upper.cloudCoverPct, t)),
     });
   }
 

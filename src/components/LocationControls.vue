@@ -2,7 +2,7 @@
   <div class="bg-[#111827] border border-slate-800 rounded-xl p-4 shadow-lg">
     <div class="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
       <!-- Search city/settlement -->
-      <div class="relative w-full md:w-80">
+      <div ref="searchContainerRef" class="relative w-full md:w-80">
         <label class="block text-xs font-medium text-slate-400 mb-1">
           Пошук населеного пункту (світ)
         </label>
@@ -15,6 +15,7 @@
             class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
             @input="onSearchInput"
             @focus="showDropdown = searchResults.length > 0"
+            @keydown.enter.prevent="onSearchEnter"
           />
           <div v-if="isSearching" class="absolute right-3 top-2 text-xs text-slate-400">
             ⏳
@@ -30,12 +31,20 @@
             v-for="item in searchResults"
             :key="item.id"
             type="button"
-            class="w-full text-left px-3 py-2 text-xs hover:bg-slate-800 flex justify-between items-center border-b border-slate-800 last:border-b-0"
+            class="w-full text-left px-3 py-2 text-xs hover:bg-slate-800 flex justify-between items-center gap-2 border-b border-slate-800 last:border-b-0 cursor-pointer"
             @click="selectSearchResult(item)"
           >
-            <span class="font-medium text-slate-200">{{ item.name }}</span>
-            <span class="text-slate-400 text-[11px] truncate max-w-[140px]">
-              {{ item.admin1 ? item.admin1 + ', ' : '' }}{{ item.country }}
+            <div class="flex items-baseline gap-1.5 min-w-0">
+              <span class="font-medium text-slate-100 truncate">{{ item.name }}</span>
+              <span
+                v-if="item.nativeName && item.nativeName.toLowerCase() !== item.name.toLowerCase()"
+                class="text-emerald-400 text-[11px] truncate"
+              >
+                ({{ item.nativeName }})
+              </span>
+            </div>
+            <span class="text-slate-400 text-[11px] truncate max-w-[160px] shrink-0">
+              {{ item.admin1 && item.admin1.toLowerCase() !== item.name.toLowerCase() ? item.admin1 + ', ' : '' }}{{ formatCountryLabel(item) }}
             </span>
           </button>
         </div>
@@ -48,27 +57,44 @@
         @submit.prevent="handleSubmit"
       >
         <div class="flex-1">
-          <div class="flex items-center justify-between mb-1">
+          <div class="flex items-center justify-between mb-1 gap-2 flex-wrap">
             <label class="text-xs font-medium text-slate-400">Введіть координати</label>
-            <div class="flex rounded-md bg-slate-900 p-0.5 border border-slate-800 text-[11px]">
+            <div class="flex items-center gap-1.5">
               <button
                 type="button"
-                data-testid="coord-mode-wgs84"
-                class="px-2 py-0.5 rounded transition"
-                :class="mode === 'wgs84' ? 'bg-emerald-600 text-white font-medium' : 'text-slate-400 hover:text-slate-200'"
-                @click="setMode('wgs84')"
+                data-testid="tab-map"
+                class="px-2.5 py-0.5 rounded-md border text-[11px] font-medium transition cursor-pointer flex items-center gap-1"
+                :class="
+                  mapOpen
+                    ? 'bg-emerald-600 text-white border-emerald-500 shadow'
+                    : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'
+                "
+                @click="$emit('toggle-map')"
               >
-                WGS 84
+                <span>🗺️</span>
+                <span>Карта</span>
               </button>
-              <button
-                type="button"
-                data-testid="coord-mode-mgrs"
-                class="px-2 py-0.5 rounded transition"
-                :class="mode === 'mgrs' ? 'bg-emerald-600 text-white font-medium' : 'text-slate-400 hover:text-slate-200'"
-                @click="setMode('mgrs')"
-              >
-                MGRS
-              </button>
+
+              <div class="flex rounded-md bg-slate-900 p-0.5 border border-slate-800 text-[11px]">
+                <button
+                  type="button"
+                  data-testid="coord-mode-wgs84"
+                  class="px-2 py-0.5 rounded transition cursor-pointer"
+                  :class="mode === 'wgs84' ? 'bg-emerald-600 text-white font-medium' : 'text-slate-400 hover:text-slate-200'"
+                  @click="setMode('wgs84')"
+                >
+                  WGS 84
+                </button>
+                <button
+                  type="button"
+                  data-testid="coord-mode-mgrs"
+                  class="px-2 py-0.5 rounded transition cursor-pointer"
+                  :class="mode === 'mgrs' ? 'bg-emerald-600 text-white font-medium' : 'text-slate-400 hover:text-slate-200'"
+                  @click="setMode('mgrs')"
+                >
+                  MGRS
+                </button>
+              </div>
             </div>
           </div>
 
@@ -100,7 +126,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { parseWgs84, formatWgs84, wgs84ToMgrs, parseMgrs } from '../domain/coordinates.js';
 import { searchLocations } from '../services/openMeteo.js';
 
@@ -108,19 +134,23 @@ const props = defineProps({
   lat: { type: Number, required: true },
   lon: { type: Number, required: true },
   locationLabel: { type: String, default: '' },
+  mapOpen: { type: Boolean, default: false },
+  fetchImpl: { type: Function, default: undefined },
 });
 
-const emit = defineEmits(['select-location']);
+const emit = defineEmits(['select-location', 'toggle-map']);
 
 const mode = ref('wgs84'); // 'wgs84' | 'mgrs'
 const inputValue = ref('');
 const errorMessage = ref('');
 
+const searchContainerRef = ref(null);
 const searchQuery = ref('');
 const searchResults = ref([]);
 const isSearching = ref(false);
 const showDropdown = ref(false);
 let searchDebounceTimer = null;
+let searchRequestSeq = 0;
 
 function syncInputFromProps() {
   if (mode.value === 'wgs84') {
@@ -176,25 +206,88 @@ function handleSubmit() {
 function onSearchInput() {
   clearTimeout(searchDebounceTimer);
   if (searchQuery.value.trim().length < 2) {
+    searchRequestSeq += 1;
+    isSearching.value = false;
     searchResults.value = [];
     showDropdown.value = false;
     return;
   }
+  const seq = ++searchRequestSeq;
   isSearching.value = true;
   searchDebounceTimer = setTimeout(async () => {
-    searchResults.value = await searchLocations(searchQuery.value);
+    const results = await searchLocations(searchQuery.value, props.fetchImpl);
+    if (seq !== searchRequestSeq) return;
+    searchResults.value = results;
     isSearching.value = false;
     showDropdown.value = searchResults.value.length > 0;
   }, 300);
 }
 
+function formatCountryLabel(item) {
+  const c = item.country || '';
+  const nc = item.nativeCountry || '';
+  if (
+    (!item.nativeName || item.nativeName.toLowerCase() === item.name.toLowerCase()) &&
+    nc &&
+    nc.toLowerCase() !== c.toLowerCase()
+  ) {
+    return `${c} (${nc})`;
+  }
+  return c;
+}
+
+async function onSearchEnter() {
+  if (searchResults.value.length > 0 && showDropdown.value) {
+    selectSearchResult(searchResults.value[0]);
+    return;
+  }
+  const q = searchQuery.value.trim();
+  if (q.length < 2) return;
+  clearTimeout(searchDebounceTimer);
+  const seq = ++searchRequestSeq;
+  isSearching.value = true;
+  const results = await searchLocations(q, props.fetchImpl);
+  if (seq !== searchRequestSeq) return;
+  searchResults.value = results;
+  isSearching.value = false;
+  if (results.length > 0) {
+    selectSearchResult(results[0]);
+  }
+}
+
+function handleDocClick(e) {
+  if (searchContainerRef.value && !searchContainerRef.value.contains(e.target)) {
+    showDropdown.value = false;
+  }
+}
+
+function handleDocKeyDown(e) {
+  if (e.key === 'Escape') {
+    showDropdown.value = false;
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleDocClick);
+  document.addEventListener('keydown', handleDocKeyDown);
+});
+
+onBeforeUnmount(() => {
+  clearTimeout(searchDebounceTimer);
+  document.removeEventListener('click', handleDocClick);
+  document.removeEventListener('keydown', handleDocKeyDown);
+});
+
 function selectSearchResult(item) {
-  searchQuery.value = `${item.name}, ${item.country}`;
+  const title = item.displayName || item.name;
+  const countryLabel = formatCountryLabel(item);
+  searchQuery.value = countryLabel ? `${title}, ${countryLabel}` : title;
   showDropdown.value = false;
   emit('select-location', {
     lat: item.lat,
     lon: item.lon,
-    label: `${item.name}, ${item.country}`,
+    label: countryLabel ? `${title}, ${countryLabel}` : title,
+    fromSearch: true,
   });
 }
 </script>

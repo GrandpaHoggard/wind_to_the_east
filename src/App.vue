@@ -1,60 +1,33 @@
 <template>
   <div class="min-h-screen bg-[#0b0f17] text-slate-100 flex flex-col">
     <!-- Header -->
-    <header class="bg-[#0f172a] border-b border-slate-800/80 sticky top-0 z-40 shadow-md">
+    <header class="bg-[#0f172a] border-b border-slate-800/80 sticky top-0 z-[1100] shadow-md">
       <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
         <div class="flex items-center gap-3">
           <div class="w-8 h-8 rounded-lg bg-emerald-600/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold text-base shadow">
             🧭
           </div>
           <div>
-            <h1 class="text-base font-bold text-white tracking-tight flex items-center gap-2">
+            <h1 class="text-base font-bold text-white tracking-tight">
               Wind to the East
-              <span class="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/60">
-                0–5000м AGL
-              </span>
             </h1>
-            <div class="text-[11px] text-slate-400 flex items-center gap-2 font-mono">
+            <div class="text-[11px] text-slate-400 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono">
               <span>WGS 84: <span class="text-slate-200">{{ wgs84Formatted }}</span></span>
               <span class="text-slate-600">•</span>
               <span>MGRS: <span class="text-emerald-400 font-bold">{{ mgrsFormatted }}</span></span>
+              <template v-if="nearestSettlement">
+                <span class="text-slate-600">•</span>
+                <span
+                  data-testid="nearest-settlement"
+                  class="font-sans text-slate-200 font-medium flex items-center gap-1"
+                >
+                  <span class="text-emerald-400">📍</span>
+                  <span>{{ nearestSettlement }}</span>
+                </span>
+              </template>
             </div>
           </div>
         </div>
-
-        <!-- Navigation Tabs -->
-        <nav class="flex rounded-lg bg-slate-900 p-1 border border-slate-800 text-xs">
-          <button
-            type="button"
-            data-testid="tab-forecast"
-            class="px-3 py-1.5 rounded-md font-medium transition cursor-pointer flex items-center gap-1.5"
-            :class="activeTab === 'forecast' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
-            @click="activeTab = 'forecast'"
-          >
-            <span>📊</span>
-            <span>Прогноз</span>
-          </button>
-          <button
-            type="button"
-            data-testid="tab-wind-profile"
-            class="px-3 py-1.5 rounded-md font-medium transition cursor-pointer flex items-center gap-1.5"
-            :class="activeTab === 'profile' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
-            @click="activeTab = 'profile'"
-          >
-            <span>🌪️</span>
-            <span>Профіль вітру</span>
-          </button>
-          <button
-            type="button"
-            data-testid="tab-map"
-            class="px-3 py-1.5 rounded-md font-medium transition cursor-pointer flex items-center gap-1.5"
-            :class="activeTab === 'map' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'"
-            @click="activeTab = 'map'"
-          >
-            <span>🗺️</span>
-            <span>Карта</span>
-          </button>
-        </nav>
       </div>
     </header>
 
@@ -79,60 +52,60 @@
 
     <!-- Main Content Area -->
     <main class="max-w-7xl mx-auto w-full px-4 py-4 flex-1 flex flex-col gap-4">
-      <!-- Location Controls (Search & Coordinates) -->
+      <!-- Location Controls (Search, Coordinates & Map Toggle) -->
       <LocationControls
         :lat="currentLat"
         :lon="currentLon"
         :location-label="currentLocationLabel"
+        :map-open="isMapOpen"
+        :fetch-impl="fetchImpl"
         @select-location="handleLocationSelect"
+        @toggle-map="isMapOpen = !isMapOpen"
       />
 
-      <!-- Filter Controls (Time window & AGL tier) -->
+      <!-- Collapsible Interactive Leaflet Map Picker (right under coordinates) -->
+      <div v-show="isMapOpen" data-testid="map-panel-wrapper">
+        <WorldMapPicker
+          :lat="currentLat"
+          :lon="currentLon"
+          :visible="isMapOpen"
+          @pick-coordinates="handleMapPick"
+          @close="isMapOpen = false"
+        />
+      </div>
+
+      <!-- Mode Switcher (Current Weather vs Wind Profile) -->
       <TimeAltitudeFilters
         v-model:mode="filterMode"
-        v-model:startDate="startDate"
-        v-model:startHour="startHour"
-        v-model:endDate="endDate"
-        v-model:endHour="endHour"
-        v-model:selectedAgl="selectedAgl"
-        :range-error="rangeError"
-        @apply-range="applyDateRange"
       />
 
-      <!-- Express Current Conditions Card -->
+      <!-- Express Current Conditions Card (with inline Altitude Selector) -->
       <CurrentConditionsCard
         :record="currentHourRecord"
-        :selected-agl="selectedAgl"
-        :elevation-meters="forecastElevation"
+        v-model:selected-agl="selectedAgl"
         :timezone="forecastTimezone"
+        :settlement="nearestSettlement"
       />
 
-      <!-- Tab 1: Forecast Table -->
-      <div v-show="activeTab === 'forecast'">
+      <!-- Single-Day Hourly Forecast Table (active in 'current' mode) -->
+      <div v-show="filterMode !== 'profile'" data-testid="forecast-section">
         <ForecastTable
           :hours="displayedHours"
           :selected-agl="selectedAgl"
+          :selected-date="selectedForecastDate"
           :active-hour-iso="activeHourIso"
+          @update:selected-date="handleForecastDateChange"
           @select-hour="handleSelectHour"
         />
       </div>
 
-      <!-- Tab 2: Wind Profile Table (0-5000m vertical) -->
-      <div v-show="activeTab === 'profile'">
+      <!-- Wind Profile Table (0-5000m vertical, active in 'profile' mode) -->
+      <div v-show="filterMode === 'profile'" data-testid="profile-section">
         <WindProfileTable
           :hours="allHours"
-          v-model:activeHourIso="activeHourIso"
+          :active-hour-iso="activeHourIso"
           :selected-agl="selectedAgl"
-        />
-      </div>
-
-      <!-- Tab 3: Interactive Leaflet Map Picker -->
-      <div v-show="activeTab === 'map'">
-        <WorldMapPicker
-          :lat="currentLat"
-          :lon="currentLon"
-          :visible="activeTab === 'map'"
-          @pick-coordinates="handleMapPick"
+          @update:active-hour-iso="handleUpdateActiveHour"
         />
       </div>
     </main>
@@ -147,8 +120,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { formatWgs84, wgs84ToMgrs } from './domain/coordinates.js';
-import { formatDateSlashes, validateTimeRange, filterHoursByRange, findCurrentHourRecord } from './domain/datetime.js';
-import { fetchWeatherForecast } from './services/openMeteo.js';
+import { formatDateSlashes, parseDateSlashes, findCurrentHourRecord } from './domain/datetime.js';
+import { fetchWeatherForecast, fetchNearestSettlement } from './services/openMeteo.js';
 import LocationControls from './components/LocationControls.vue';
 import TimeAltitudeFilters from './components/TimeAltitudeFilters.vue';
 import CurrentConditionsCard from './components/CurrentConditionsCard.vue';
@@ -163,28 +136,28 @@ const props = defineProps({
 // Location state (default Kyiv)
 const currentLat = ref(50.4501);
 const currentLon = ref(30.5234);
-const currentLocationLabel = ref('Київ');
+const currentLocationLabel = ref('Київ, Україна');
+const nearestSettlement = ref('Київ, Україна');
+let settlementReqSeq = 0;
+let forecastReqSeq = 0;
 
-// Navigation state
-const activeTab = ref('forecast'); // 'forecast' | 'profile' | 'map'
+// Navigation & map state
+const isMapOpen = ref(false);
 const activeHourIso = ref('');
+const hasCustomActiveHour = ref(false);
 
-// Filter & mode state
-const filterMode = ref('current'); // 'current' | 'range'
+// Mode & altitude state ('current' | 'profile')
+const filterMode = ref('current');
 const selectedAgl = ref(0);
 
-// Default dates: today and tomorrow in DD\MM\YYYY
+// Single-day forecast date (default: today in DD\MM\YYYY)
 const today = new Date();
-const tomorrow = new Date(Date.now() + 24 * 3600 * 1000);
-const startDate = ref(formatDateSlashes({ day: today.getDate(), month: today.getMonth() + 1, year: today.getFullYear() }));
-const startHour = ref(today.getHours());
-const endDate = ref(formatDateSlashes({ day: tomorrow.getDate(), month: tomorrow.getMonth() + 1, year: tomorrow.getFullYear() }));
-const endHour = ref(today.getHours());
-const rangeError = ref('');
+const initialTodayDate = formatDateSlashes({ day: today.getDate(), month: today.getMonth() + 1, year: today.getFullYear() });
+const selectedForecastDate = ref(initialTodayDate);
+const hasCustomForecastDate = ref(false);
 
 // Forecast data state
 const allHours = ref([]);
-const forecastElevation = ref(0);
 const forecastTimezone = ref('Europe/Kyiv');
 const isLoading = ref(false);
 const errorMessage = ref('');
@@ -195,77 +168,102 @@ const mgrsFormatted = computed(() => {
   return res.ok ? res.mgrs : '—';
 });
 
-const currentHourRecord = computed(() => findCurrentHourRecord(allHours.value));
+const currentHourRecord = computed(() =>
+  findCurrentHourRecord(allHours.value, undefined, forecastTimezone.value)
+);
 
 const displayedHours = computed(() => {
-  if (filterMode.value === 'current') {
-    return allHours.value;
-  }
-  const range = validateTimeRange({
-    startDate: startDate.value,
-    startHour: startHour.value,
-    endDate: endDate.value,
-    endHour: endHour.value,
-  });
-  if (!range.ok) {
-    return allHours.value;
-  }
-  const filtered = filterHoursByRange(allHours.value, range);
-  return filtered.length > 0 ? filtered : allHours.value;
+  if (allHours.value.length === 0) return [];
+  const parsed = parseDateSlashes(selectedForecastDate.value);
+  const targetDate = parsed.ok ? parsed.normalized : String(selectedForecastDate.value || '').trim();
+  return allHours.value.filter((h) => h.dateStr === targetDate);
 });
 
 async function loadForecast() {
+  const seq = ++forecastReqSeq;
   isLoading.value = true;
   errorMessage.value = '';
   try {
     const res = await fetchWeatherForecast(currentLat.value, currentLon.value, props.fetchImpl);
+    if (seq !== forecastReqSeq) return;
     allHours.value = res.hours;
-    forecastElevation.value = res.elevationMeters;
     forecastTimezone.value = res.timezone;
-    if (res.hours.length > 0 && !activeHourIso.value) {
-      const nowRecord = findCurrentHourRecord(res.hours);
-      activeHourIso.value = nowRecord ? nowRecord.timeIso : res.hours[0].timeIso;
+    if (res.hours.length > 0) {
+      const nowRecord = findCurrentHourRecord(res.hours, undefined, res.timezone);
+      const hasMatchingHour =
+        Boolean(activeHourIso.value) && res.hours.some((h) => h.timeIso === activeHourIso.value);
+      if (!hasCustomActiveHour.value || !hasMatchingHour) {
+        activeHourIso.value = (nowRecord || res.hours[0]).timeIso;
+      }
+      const parsedSel = parseDateSlashes(selectedForecastDate.value);
+      const normSel = parsedSel.ok ? parsedSel.normalized : String(selectedForecastDate.value || '').trim();
+      const hasMatchingDay = res.hours.some((h) => h.dateStr === normSel);
+      if (!hasCustomForecastDate.value || !hasMatchingDay) {
+        selectedForecastDate.value = (nowRecord || res.hours[0]).dateStr;
+      }
     }
   } catch (err) {
+    if (seq !== forecastReqSeq) return;
     errorMessage.value = err.message || 'Не вдалося завантажити погодні дані';
   } finally {
-    isLoading.value = false;
+    if (seq === forecastReqSeq) {
+      isLoading.value = false;
+    }
+  }
+}
+
+async function resolveNearestSettlement(lat, lon) {
+  const seq = ++settlementReqSeq;
+  const resolved = await fetchNearestSettlement(lat, lon, props.fetchImpl);
+  if (seq !== settlementReqSeq) return;
+  if (resolved) {
+    nearestSettlement.value = resolved;
+    currentLocationLabel.value = resolved;
   }
 }
 
 function handleLocationSelect(loc) {
   currentLat.value = loc.lat;
   currentLon.value = loc.lon;
-  currentLocationLabel.value = loc.label;
+  if (loc.fromSearch && loc.label) {
+    settlementReqSeq += 1;
+    nearestSettlement.value = loc.label;
+    currentLocationLabel.value = loc.label;
+  } else {
+    nearestSettlement.value = '';
+    currentLocationLabel.value = loc.label || formatWgs84(loc.lat, loc.lon, 4);
+    resolveNearestSettlement(loc.lat, loc.lon);
+  }
   loadForecast();
 }
 
 function handleMapPick({ lat, lon }) {
   currentLat.value = lat;
   currentLon.value = lon;
+  nearestSettlement.value = '';
   currentLocationLabel.value = formatWgs84(lat, lon, 4);
+  resolveNearestSettlement(lat, lon);
   loadForecast();
 }
 
-function applyDateRange() {
-  rangeError.value = '';
-  const range = validateTimeRange({
-    startDate: startDate.value,
-    startHour: startHour.value,
-    endDate: endDate.value,
-    endHour: endHour.value,
-  });
-  if (!range.ok) {
-    rangeError.value = range.error;
-  }
+function handleForecastDateChange(val) {
+  selectedForecastDate.value = val;
+  hasCustomForecastDate.value = true;
+}
+
+function handleUpdateActiveHour(timeIso) {
+  activeHourIso.value = timeIso;
+  hasCustomActiveHour.value = true;
 }
 
 function handleSelectHour(timeIso) {
   activeHourIso.value = timeIso;
-  activeTab.value = 'profile';
+  hasCustomActiveHour.value = true;
+  filterMode.value = 'profile';
 }
 
 onMounted(() => {
   loadForecast();
+  resolveNearestSettlement(currentLat.value, currentLon.value);
 });
 </script>

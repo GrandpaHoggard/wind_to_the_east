@@ -4,3 +4,6 @@ dist/
 .tools/
 .env
 .superpowers/
+.taste-skill/
+.agents/
+deploy_to_server.bat

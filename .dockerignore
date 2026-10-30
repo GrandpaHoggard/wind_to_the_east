@@ -1,0 +1,12 @@
+node_modules
+dist
+.tools
+.git
+.github
+.tmp
+.agents
+.superpowers
+.taste-skill
+tests
+docs
+*.bat

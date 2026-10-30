@@ -67,4 +67,28 @@ describe('ДД\\ММ\\РРРР date formatting and validation', () => {
     });
     expect(findCurrentHourRecord(sample, '2026-10-29T14:00')?.v).toBe(2);
   });
+
+  it('resolves current hour record using the target location IANA timezone instead of browser local clock', () => {
+    const now = new Date();
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+    });
+    const parts = Object.fromEntries(fmt.formatToParts(now).map((p) => [p.type, p.value]));
+    const tokyoIso = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:00`;
+
+    // Also include browser-local hour with a different value so we prove Asia/Tokyo wins
+    const localIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T${String(now.getHours()).padStart(2, '0')}:00`;
+    if (tokyoIso !== localIso) {
+      const records = [
+        { timeIso: localIso, label: 'wrong-browser-local' },
+        { timeIso: tokyoIso, label: 'correct-tokyo-local' },
+      ];
+      expect(findCurrentHourRecord(records, undefined, 'Asia/Tokyo')?.label).toBe('correct-tokyo-local');
+    }
+  });
 });

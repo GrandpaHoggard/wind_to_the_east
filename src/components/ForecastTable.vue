@@ -1,19 +1,44 @@
 <template>
-  <div class="bg-[#111827] border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-    <div class="px-4 py-3 bg-slate-900/80 border-b border-slate-800 flex justify-between items-center flex-wrap gap-2">
-      <div class="flex items-center gap-2">
-        <span class="text-sm">📊</span>
-        <h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wider">
-          Погодинний прогноз на висоті:
-          <span class="text-emerald-400 normal-case font-bold">{{ formatAglLabel(selectedAgl) }} AGL</span>
-        </h3>
+  <div class="bg-[#111827] border border-slate-800 rounded-xl shadow-xl">
+    <div class="px-4 py-3 bg-slate-900/80 border-b border-slate-800 rounded-t-xl flex justify-between items-center flex-wrap gap-3">
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="flex items-center gap-2">
+          <span class="text-sm">📊</span>
+          <h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wider">
+            Погодинний прогноз на висоті:
+            <span class="text-emerald-400 normal-case font-bold">{{ formatAglLabel(selectedAgl) }} AGL</span>
+          </h3>
+        </div>
+
+        <!-- Single-day Forecast Date Selector with Calendar Dropdown -->
+        <div class="relative flex items-center gap-1.5">
+          <span class="text-slate-400 text-[11px]">📅</span>
+          <input
+            data-testid="forecast-date-input"
+            type="text"
+            :value="selectedDate"
+            placeholder="ДД\ММ\РРРР"
+            aria-label="Дата прогнозу"
+            class="w-28 bg-slate-950/90 border border-slate-700 hover:border-emerald-500/70 rounded-md px-2.5 py-1 text-center font-mono text-xs text-slate-100 focus:outline-none focus:border-emerald-500 cursor-pointer transition"
+            @input="$emit('update:selectedDate', $event.target.value)"
+            @click="isDatePickerOpen = !isDatePickerOpen"
+          />
+
+          <CalendarDatePicker
+            v-if="isDatePickerOpen"
+            :selected-date="selectedDate"
+            @select="handleSelectDate"
+            @close="isDatePickerOpen = false"
+          />
+        </div>
       </div>
+
       <div class="text-[11px] text-slate-400">
         Показано годин: {{ hours.length }} • Клікніть на рядок для детального висотного зрізу
       </div>
     </div>
 
-    <div class="overflow-x-auto">
+    <div class="overflow-x-auto rounded-b-xl">
       <table class="w-full text-left border-collapse text-xs">
         <thead>
           <tr class="bg-slate-950/80 text-slate-400 text-[11px] border-b border-slate-800 uppercase tracking-wider">
@@ -29,6 +54,14 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-800/60 font-mono text-slate-200">
+          <tr
+            v-if="hours.length === 0"
+            data-testid="forecast-empty-row"
+          >
+            <td colspan="9" class="py-6 px-4 text-center font-sans text-xs text-slate-400">
+              Немає даних прогнозу на обрану дату (прогноз доступний на 14 діб). Оберіть інший день у календарі.
+            </td>
+          </tr>
           <tr
             v-for="h in hours"
             :key="h.timeIso"
@@ -88,12 +121,24 @@
 
             <!-- Cloud cover -->
             <td class="py-2.5 px-3 whitespace-nowrap text-slate-300">
-              {{ getTier(h)?.cloudCoverPct != null ? getTier(h).cloudCoverPct + '%' : '—' }}
+              <span class="font-medium">{{ h.surfaceCloudCoverPct != null ? h.surfaceCloudCoverPct + '%' : '—' }}</span>
+              <span
+                v-if="selectedAgl > 0 && getTier(h)?.cloudCoverPct != null && getTier(h).cloudCoverPct !== h.surfaceCloudCoverPct"
+                class="text-[10px] text-slate-400 block font-sans"
+              >
+                шар: {{ getTier(h).cloudCoverPct }}%
+              </span>
             </td>
 
             <!-- Humidity -->
             <td class="py-2.5 px-3 whitespace-nowrap text-slate-400">
-              {{ getTier(h)?.humidityPct != null ? getTier(h).humidityPct + '%' : '—' }}
+              <span>{{ h.surfaceHumidityPct != null ? h.surfaceHumidityPct + '%' : '—' }}</span>
+              <span
+                v-if="selectedAgl > 0 && getTier(h)?.humidityPct != null && getTier(h).humidityPct !== h.surfaceHumidityPct"
+                class="text-[10px] text-slate-500 block font-sans"
+              >
+                на вис: {{ getTier(h).humidityPct }}%
+              </span>
             </td>
           </tr>
         </tbody>
@@ -103,15 +148,25 @@
 </template>
 
 <script setup>
+import { ref } from 'vue';
 import { formatAglLabel } from '../domain/atmosphere.js';
+import CalendarDatePicker from './CalendarDatePicker.vue';
 
 const props = defineProps({
   hours: { type: Array, required: true },
   selectedAgl: { type: Number, default: 0 },
+  selectedDate: { type: String, default: '' },
   activeHourIso: { type: String, default: '' },
 });
 
-defineEmits(['select-hour']);
+const emit = defineEmits(['select-hour', 'update:selectedDate']);
+
+const isDatePickerOpen = ref(false);
+
+function handleSelectDate(dateVal) {
+  emit('update:selectedDate', dateVal);
+  isDatePickerOpen.value = false;
+}
 
 function getTier(h) {
   if (!h || !h.tiers) return null;

@@ -1,8 +1,14 @@
+function isValidDegreeInput(deg) {
+  if (deg == null || typeof deg === 'boolean') return false;
+  if (typeof deg === 'string' && deg.trim() === '') return false;
+  return Number.isFinite(Number(deg));
+}
+
 /**
  * Normalizes degrees to integer in [0, 359].
  */
 export function normalizeDegrees(deg) {
-  if (deg == null || Number.isNaN(Number(deg))) {
+  if (!isValidDegreeInput(deg)) {
     return 0;
   }
   const rounded = Math.round(Number(deg));
@@ -20,7 +26,7 @@ const VANE_ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
  * 270° = West = ←
  */
 export function degreesToVaneArrow(deg) {
-  if (deg == null || Number.isNaN(Number(deg))) {
+  if (!isValidDegreeInput(deg)) {
     return '—';
   }
   const normalized = normalizeDegrees(deg);
@@ -33,7 +39,7 @@ export function degreesToVaneArrow(deg) {
  * Example: 45 -> { arrow: '↗', degrees: 45, label: '↗ 45°' }
  */
 export function formatWindDirection(deg) {
-  if (deg == null || Number.isNaN(Number(deg))) {
+  if (!isValidDegreeInput(deg)) {
     return { arrow: '—', degrees: null, label: '—' };
   }
   const degrees = normalizeDegrees(deg);

@@ -28,10 +28,12 @@
   background: #475569;
 }
 
-/* Leaflet dark theme tweaks */
+/* Leaflet dark theme tweaks & stacking context isolation */
 .leaflet-container {
   background: #0f172a !important;
   font-family: inherit;
+  isolation: isolate;
+  z-index: 0;
 }
 .leaflet-tile {
   filter: brightness(0.65) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.75);

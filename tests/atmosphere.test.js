@@ -7,12 +7,45 @@ import {
 } from '../src/domain/atmosphere.js';
 
 describe('AGL vertical interpolation and Wind Shear gust model', () => {
-  it('exposes all 15 spec AGL tiers from surface (0) to 5000 m', () => {
+  it('exposes all 15 spec AGL tiers from surface (0) to 5000 m including 4000 m without 25 m', () => {
     expect(AGL_TIERS_METERS).toEqual([
-      0, 25, 50, 75, 100, 120, 150, 200, 300, 500, 1000, 1500, 2000, 3000, 5000,
+      0, 50, 75, 100, 120, 150, 200, 300, 500, 1000, 1500, 2000, 3000, 4000, 5000,
     ]);
     expect(formatAglLabel(0)).toBe('Земля');
+    expect(formatAglLabel(4000)).toBe('4 000 м');
     expect(formatAglLabel(5000)).toBe('5 000 м');
+  });
+
+  it('interpolates 4000m AGL tier between bounding upper-air pressure levels and omits 25m', () => {
+    const profile = computeAltitudeProfile({
+      elevationMeters: 100,
+      surface: {
+        tempC: 12,
+        humidityPct: 60,
+        cloudCoverPct: 20,
+        cloudLowPct: 20,
+        cloudMidPct: 40,
+        windSpeed10m: 4,
+        windDir10m: 90,
+        windGusts10m: 6,
+      },
+      pressureLevels: [
+        // 3000m AGL (3100m MSL) -> 5000m AGL (5100m MSL): midpoint 4000m AGL should interpolate linearly
+        { hPa: 700, geopotentialHeightMsl: 3100, windSpeedMs: 10, windDirDeg: 180, tempC: -4, humidityPct: 50, cloudCoverPct: 30 },
+        { hPa: 500, geopotentialHeightMsl: 5100, windSpeedMs: 20, windDirDeg: 200, tempC: -16, humidityPct: 70, cloudCoverPct: 80 },
+      ],
+    });
+
+    expect(profile[25]).toBeUndefined();
+    expect(profile[4000]).toMatchObject({
+      aglMeters: 4000,
+      aglLabel: '4 000 м',
+      windSpeedMs: 15,
+      windDirDeg: 190,
+      tempC: -10,
+      humidityPct: 60,
+      cloudCoverPct: 55,
+    });
   });
 
   it('interpolates wind direction across 360°/0° North boundary via shortest arc', () => {
@@ -107,5 +140,51 @@ describe('AGL vertical interpolation and Wind Shear gust model', () => {
 
     // 100m AGL tier must NOT be 99 m/s from subterranean/near-ground isobaric level
     expect(profile[100].windSpeedMs).toBeLessThan(10);
+  });
+
+  it('preserves null for missing tempC and humidityPct across interpolated tiers instead of coercing null to 0', () => {
+    const profile = computeAltitudeProfile({
+      elevationMeters: 100,
+      surface: {
+        tempC: null,
+        humidityPct: null,
+        cloudCoverPct: 30,
+        cloudLowPct: 30,
+        windSpeed10m: 5,
+        windDir10m: 90,
+        windGusts10m: 7,
+      },
+      pressureLevels: [
+        { hPa: 700, geopotentialHeightMsl: 3100, windSpeedMs: 15, windDirDeg: 180, tempC: null, humidityPct: null, cloudCoverPct: 50 },
+      ],
+    });
+
+    expect(profile[0].tempC).toBeNull();
+    expect(profile[500].tempC).toBeNull();
+    expect(profile[1500].tempC).toBeNull();
+    expect(profile[500].humidityPct).toBeNull();
+    expect(profile[1500].humidityPct).toBeNull();
+  });
+
+  it('skips incomplete pressure levels where windSpeedMs is null instead of injecting a fake 0 m/s wind drop', () => {
+    const profile = computeAltitudeProfile({
+      elevationMeters: 100,
+      surface: {
+        tempC: 12,
+        humidityPct: 60,
+        cloudCoverPct: 20,
+        windSpeed10m: 10,
+        windDir10m: 180,
+        windGusts10m: 10,
+      },
+      pressureLevels: [
+        // Valid geopotential height (1600m MSL = 1500m AGL) with missing windSpeedMs
+        { hPa: 850, geopotentialHeightMsl: 1600, windSpeedMs: null, windDirDeg: null, tempC: 2, humidityPct: 60, cloudCoverPct: 30 },
+        { hPa: 700, geopotentialHeightMsl: 3100, windSpeedMs: 20, windDirDeg: 180, tempC: -6, humidityPct: 50, cloudCoverPct: 40 },
+      ],
+    });
+
+    // Midpoint 1500m between 0m (10 m/s) and 3000m (20 m/s) should be ~15 m/s, NOT 0 m/s
+    expect(profile[1500].windSpeedMs).toBeCloseTo(15, 0);
   });
 });
